@@ -22,7 +22,7 @@
            wait=true
            count=1
            assign_public_ip=yes
-           vpc_subnet_id=subnet-72958f1b
+           vpc_subnet_id=put your subnet_id
       register: dev_ec2_info
 
     - name: make prd server with root volume
