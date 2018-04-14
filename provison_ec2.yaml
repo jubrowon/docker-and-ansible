@@ -1,0 +1,56 @@
+--- # Create ec2 instance playbook
+
+- hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+      inst_name: "test_ansible"
+      keypair: "put your key"
+      instance_type: "t2.nano"
+      image: "ami_id"
+      group: "dev"
+      region: "ap-northeast-2"
+  tasks:
+    - name: make dev server
+      ec2: image={{ image }}
+           instance_type={{ instance_type }}
+           keypair={{ keypair }}
+           instance_tags='{"Name":"{{ inst_name }}"}'
+           region={{ region }}
+           group={{ group }}
+           wait=true
+           count=1
+           assign_public_ip=yes
+           vpc_subnet_id=subnet-72958f1b
+      register: dev_ec2_info
+
+    - name: make prd server with root volume
+      ec2:
+        image: "{{ image }}"
+        instance_type: "{{ instance_type }}"
+        keypair: "{{ keypair }}"
+        instance_tags: '{"Name": "{{ inst_name }}"}'
+        region: "{{ region }}"
+        group: ['docker-security','docker-machine']
+        wait: true
+        count: 1
+        assign_public_ip : yes
+        vpc_subnet_id: your subnet
+        volumes:
+         - device_name: /dev/sdb1
+           volume_type: gp2
+           volume_size: 10
+           delete_on_termination: true
+      register: prd_ec2_info
+
+
+    - name: Add the newly created EC2 instance(s) to the local host group
+      lineinfile:
+        path: /home/vagrant/hosts
+        regexp: "{{ item[0] }}"
+        insertafter: "{{ item[1] }}"
+        line: "{{ item[0] }}"
+      with_together:
+        - [ '"{{ dev_ec2_info.instances[0].public_ip }}"', '"{{ prd_ec2_info.instances[0].public_ip }}"' ]
+        - [ 'devserver', 'prdserver']

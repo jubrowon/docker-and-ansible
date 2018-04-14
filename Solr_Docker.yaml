@@ -1,0 +1,65 @@
+# install solr in EC2 linux
+
+FROM ubuntu:latest
+
+# Make /downloads directory to put a jdk file
+RUN mkdir /downloads
+ADD ./jdk-8u151-linux-x64.tar.gz /downloads
+
+# tar the jdk file
+RUN ls -al /downloads
+#RUN tar xvfz /downloads/jdk-8u151-linux-x64.tar.gz
+
+# Link java to /usr/bin/java
+RUN ln -s /downloads/jdk1.8.0_151/bin/java /etc/alternatives/java
+RUN ln -s /etc/alternatives/java /usr/bin/java
+RUN java -version
+
+# Download Tomcat, Solr & Zookeeper
+RUN apt-get update && apt-get install -y \
+  wget vim
+
+RUN cd /downloads && \
+  wget https://archive.apache.org/dist/tomcat/tomcat-7/v7.0.82/bin/apache-tomcat-7.0.82.tar.gz && \
+  wget https://archive.apache.org/dist/lucene/solr/4.9.0/solr-4.9.0.tgz && \
+  wget https://archive.apache.org/dist/zookeeper/zookeeper-3.4.6/zookeeper-3.4.6.tar.gz && \
+  ls -al /downloads/
+
+# Unzip Tomcat, Solr and Zookeeper
+RUN cd /downloads && \
+  tar xvfz apache-tomcat-7.0.82.tar.gz && \
+  tar xvfz solr-4.9.0.tgz && \
+  tar xvfz zookeeper-3.4.6.tar.gz
+
+# Move the folders /opt
+RUN cd /downloads && \
+  mv apache-tomcat-7.0.82 /opt/tomcat && \
+  mv solr-4.9.0 /opt/solr_install && \
+  mv zookeeper-3.4.6 /opt/zookeeper
+
+# Configure Solr Home
+RUN mkdir /opt/solr_home && \
+  find /opt/ -name solr.xml && \
+  cd /opt && \
+  cp -r solr_install/example/solr/* solr_home/ && \
+  cd /opt/solr_home && \
+  sed -i -e 's/\${host:}/localhost/g' solr.xml && \
+  sed -i -e 's/\${jetty.port:8983}/8080/g' solr.xml && \
+  cd /opt/solr_home && \
+  rm -rf collection1 && \
+  mkdir /opt/solr_home/war && \
+  cp /opt/solr_install/dist/solr-*.war /opt/solr_home/war/solr.war
+
+# Configure Tomcat
+RUN cd /opt && \
+  cp -r solr_install/example/lib/ext/* tomcat/lib/ && \
+  cp -r solr_install/example/resources/log4j.properties tomcat/lib/ && \
+  /opt/tomcat/bin/startup.sh && \
+  sleep 11 && \
+  /opt/tomcat/bin/shutdown.sh && \
+  cd /opt/tomcat/conf/Catalina/localhost && \
+  echo '<?xml version="1.0" encoding="utf-8"?> <Context docBase="/opt/solr_home/war/solr.war" crossContext="true">  <Environment name="solr/home" type="java.lang.String" value="/opt/solr_home" override="true"/> </Context>' >> solr.xml
+
+EXPOSE 8080
+
+#CMD /opt/tomcat/bin/startup.sh
